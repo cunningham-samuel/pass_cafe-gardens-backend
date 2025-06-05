@@ -1,6 +1,5 @@
 const express = require('express');
 const axios = require('axios');
-const crypto = require('crypto');
 const cors = require('cors');
 
 const app = express();
@@ -11,13 +10,12 @@ app.use(cors());
 // ENV variables
 const NEXUDUS_API_USERNAME = process.env.NEXUDUS_API_USERNAME;
 const NEXUDUS_API_PASSWORD = process.env.NEXUDUS_API_PASSWORD;
-const SHARED_SECRET = process.env.SHARED_SECRET;
 
 app.get('/api/get-bookings', async (req, res) => {
     const { userid, hash } = req.query;
 
     if (!userid || !hash) {
-        return res.json({ error: 'Missing parameters.' });
+        return res.json({ error: 'Missing userID parameter.' });
     }
 
     try {

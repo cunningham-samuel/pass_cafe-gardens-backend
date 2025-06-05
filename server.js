@@ -20,17 +20,6 @@ app.get('/api/get-bookings', async (req, res) => {
         return res.json({ error: 'Missing parameters.' });
     }
 
-    // Validate hash
-    const fullUrlWithoutHash = req.protocol + '://' + req.get('host') + req.originalUrl.split('&hash=')[0];
-
-    const hmac = crypto.createHmac('sha256', SHARED_SECRET);
-    hmac.update(fullUrlWithoutHash);
-    const computedHash = hmac.digest('hex');
-
-    if (computedHash !== hash) {
-        return res.json({ error: 'Invalid signature.' });
-    }
-
     try {
         const bookingsRes = await axios.get(`https://spaces.nexudus.com/api/spaces/bookings?customerid=${userid}&fromdate=${new Date().toISOString()}&status=Confirmed`, {
             auth: {

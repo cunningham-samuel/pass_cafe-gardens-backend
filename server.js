@@ -12,19 +12,22 @@ const NEXUDUS_API_USERNAME = process.env.NEXUDUS_API_USERNAME;
 const NEXUDUS_API_PASSWORD = process.env.NEXUDUS_API_PASSWORD;
 
 app.get('/api/get-bookings', async (req, res) => {
-    const { userid, hash } = req.query;
+    const { userid } = req.query;
 
-    if (!userid || !hash) {
+    if (!userid) {
         return res.json({ error: 'Missing userID parameter.' });
     }
 
     try {
-        const bookingsRes = await axios.get(`https://spaces.nexudus.com/api/spaces/bookings?customerid=${userid}&fromdate=${new Date().toISOString()}&status=Confirmed`, {
-            auth: {
-                username: NEXUDUS_API_USERNAME,
-                password: NEXUDUS_API_PASSWORD
+        const bookingsRes = await axios.get(
+            `https://spaces.nexudus.com/api/spaces/bookings?customerid=${userid}&fromdate=${new Date().toISOString()}&status=Confirmed`, 
+            {
+                auth: {
+                    username: NEXUDUS_API_USERNAME,
+                    password: NEXUDUS_API_PASSWORD
+                }
             }
-        });
+        );
 
         res.json({ bookings: bookingsRes.data.Records });
     } catch (err) {
@@ -36,3 +39,4 @@ app.get('/api/get-bookings', async (req, res) => {
 app.listen(port, () => {
     console.log(`Server running on port ${port}`);
 });
+

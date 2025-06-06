@@ -83,7 +83,7 @@ app.get('/api/get-bookings', async (req, res) => {
         const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
 
-        const bookingsUrl = `https://spaces.nexudus.com/api/spaces/bookings?Booking_Coworker=${coworkerId}&from_Booking_FromTime=${toISOStringNoMillis(startOfDay)}&to_Booking_ToTime=${toISOStringNoMillis(endOfDay)}&status=Confirmed`;
+        const bookingsUrl = `https://spaces.nexudus.com/api/spaces/bookings?page=1&size=25&Booking_Coworker=${coworkerId}&from_Booking_FromTime=${toISOStringNoMillis(startOfDay)}&to_Booking_ToTime=${toISOStringNoMillis(endOfDay)}&status=Confirmed`;
 
         console.log("Bookings request URL:", bookingsUrl);
 

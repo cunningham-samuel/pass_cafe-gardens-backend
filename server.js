@@ -31,9 +31,11 @@ app.get('/api/get-bookings', async (req, res) => {
 
         res.json({ bookings: bookingsRes.data.Records });
     } catch (err) {
-        console.error(err.response?.data || err);
-        res.json({ error: 'Failed to retrieve bookings.' });
-    }
+    console.error("Error response data:", err.response?.data);
+    console.error("Error full object:", err);
+    res.json({ error: 'Failed to retrieve bookings.' });
+}
+
 });
 
 app.listen(port, () => {

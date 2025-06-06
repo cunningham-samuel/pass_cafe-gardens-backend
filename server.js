@@ -31,10 +31,16 @@ app.get('/api/get-bookings', async (req, res) => {
 
         res.json({ bookings: bookingsRes.data.Records });
     } catch (err) {
-    console.error("Error response data:", err.response?.data);
-    console.error("Error full object:", err);
+    if (err.response) {
+        console.error("Nexudus API Error Response:", err.response.data);
+        console.error("Status Code:", err.response.status);
+        console.error("Headers:", err.response.headers);
+    } else {
+        console.error("Error:", err.message);
+    }
     res.json({ error: 'Failed to retrieve bookings.' });
 }
+
 
 });
 

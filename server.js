@@ -1,7 +1,7 @@
 const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
-const crypto = require('crypto');  // Added for hash verification
+const crypto = require('crypto');
 
 const app = express();
 const port = process.env.PORT;
@@ -11,15 +11,20 @@ app.use(cors());
 // ENV variables
 const NEXUDUS_API_USERNAME = process.env.NEXUDUS_API_USERNAME;
 const NEXUDUS_API_PASSWORD = process.env.NEXUDUS_API_PASSWORD;
-const NEXUDUS_SHARED_SECRET = process.env.NEXUDUS_SHARED_SECRET;  // New shared secret
+const NEXUDUS_SHARED_SECRET = process.env.NEXUDUS_SHARED_SECRET;
 
 // Function to verify the hash signature
-function isValidHash(fullUrl, providedHash) {
-    // Remove the hash param from the URL before verifying
-    const urlWithoutHash = fullUrl.replace(/([?&]hash=[^&]*)/, '');
+function isValidHash(userid, providedHash) {
+    const stringToSign = String(userid).trim();  // Normalize userid to string
     const hmac = crypto.createHmac('sha256', NEXUDUS_SHARED_SECRET);
-    hmac.update(urlWithoutHash);
+    hmac.update(stringToSign);
     const calculatedHash = hmac.digest('hex');
+
+    // Debug logs
+    console.log("UserID (string):", stringToSign);
+    console.log("Calculated Hash:", calculatedHash);
+    console.log("Provided Hash:", providedHash);
+
     return calculatedHash === providedHash;
 }
 
@@ -30,11 +35,7 @@ app.get('/api/get-bookings', async (req, res) => {
         return res.json({ error: 'Missing userid or hash parameter.' });
     }
 
-    // Full URL (including protocol & host)
-    const fullUrl = req.protocol + '://' + req.get('host') + req.originalUrl;
-
-    // Verify hash
-    if (!isValidHash(fullUrl, hash)) {
+    if (!isValidHash(userid, hash)) {
         console.error('Invalid hash signature.');
         return res.json({ error: 'Invalid signature.' });
     }

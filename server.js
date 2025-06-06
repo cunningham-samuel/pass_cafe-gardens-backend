@@ -7,30 +7,30 @@ const rateLimit = require('express-rate-limit');
 const app = express();
 const port = process.env.PORT;
 
+// Apply CORS
 app.use(cors());
 
-// Rate limiting
+// Apply basic rate limiting middleware
 const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
+    windowMs: 15 * 60 * 1000, // 15 minutes
     max: 100,
     standardHeaders: true,
     legacyHeaders: false,
 });
 app.use(limiter);
 
-// ENV variables
+// Environment variables
 const NEXUDUS_API_USERNAME = process.env.NEXUDUS_API_USERNAME;
 const NEXUDUS_API_PASSWORD = process.env.NEXUDUS_API_PASSWORD;
 const NEXUDUS_SHARED_SECRET = process.env.NEXUDUS_SHARED_SECRET;
 
-// Verify hash signature
+// Hash verification function
 function isValidHash(userid, providedHash) {
     const stringToSign = String(userid).trim();
     const hmac = crypto.createHmac('sha256', NEXUDUS_SHARED_SECRET);
     hmac.update(stringToSign);
     const calculatedHash = hmac.digest('hex');
 
-    // ✅ LOGGING for debugging:
     console.log("Validating request:");
     console.log("UserID:", stringToSign);
     console.log("Provided Hash:", providedHash);
@@ -39,9 +39,21 @@ function isValidHash(userid, providedHash) {
     return calculatedHash === providedHash;
 }
 
-// Helper to format date in strict ISO format for Nexudus (removes milliseconds)
-function toISOStringNoMillis(date) {
-    return date.toISOString().split('.')[0] + 'Z';
+// Generate today's date range in Nexudus ISO format
+function getTodayDateRange() {
+    const now = new Date();
+
+    const startOfDay = new Date(now);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(now);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const format = (date) => date.toISOString().split('.')[0] + 'Z';
+
+    return {
+        from: format(startOfDay),
+        to: format(endOfDay),
+    };
 }
 
 app.get('/api/get-bookings', async (req, res) => {
@@ -53,13 +65,15 @@ app.get('/api/get-bookings', async (req, res) => {
     if (!/^\d+$/.test(userid)) {
         return res.status(400).json({ error: 'Invalid userid format.' });
     }
+
     if (!isValidHash(userid, hash)) {
         console.error('Invalid hash signature.');
         return res.status(403).json({ error: 'Invalid signature.' });
     }
 
     try {
-        // STEP 1: Get CoworkerId from UserId
+        // STEP 1 - Lookup coworker by user ID
+        console.log("Looking up coworker for UserID:", userid);
         const coworkerRes = await axios.get(
             `https://spaces.nexudus.com/api/billing/coworkers?Coworker_User=${userid}`,
             {
@@ -70,33 +84,35 @@ app.get('/api/get-bookings', async (req, res) => {
             }
         );
 
-        if (!coworkerRes.data.Records || coworkerRes.data.Records.length === 0) {
-            console.log("No coworker found for userID:", userid);
+        const coworkerRecords = coworkerRes.data.Records;
+        if (!coworkerRecords || coworkerRecords.length === 0) {
+            console.error("No coworker found for UserID:", userid);
             return res.json({ bookings: [] });
         }
 
-        const coworkerId = coworkerRes.data.Records[0].Id;
-        console.log("CoworkerID found:", coworkerId);
+        const coworkerId = coworkerRecords[0].Id;
+        console.log("Found coworker ID:", coworkerId);
 
-        // STEP 2: Query today's bookings for this coworker
-        const now = new Date();
-        const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+        // STEP 2 - Get bookings for coworker today
+        const { from, to } = getTodayDateRange();
 
-        const bookingsUrl = `https://spaces.nexudus.com/api/spaces/bookings?page=1&size=25&Booking_Coworker=${coworkerId}&from_Booking_FromTime=${toISOStringNoMillis(startOfDay)}&to_Booking_ToTime=${toISOStringNoMillis(endOfDay)}&status=Confirmed`;
+        console.log(`Querying bookings for coworker ${coworkerId} from ${from} to ${to}`);
 
-        console.log("Bookings request URL:", bookingsUrl);
-
-        const bookingsRes = await axios.get(bookingsUrl, {
-            auth: {
-                username: NEXUDUS_API_USERNAME,
-                password: NEXUDUS_API_PASSWORD
+        const bookingsRes = await axios.get(
+            `https://spaces.nexudus.com/api/spaces/bookings?Booking_Coworker=${coworkerId}&from_Booking_FromTime=${from}&to_Booking_ToTime=${to}&status=Confirmed`,
+            {
+                auth: {
+                    username: NEXUDUS_API_USERNAME,
+                    password: NEXUDUS_API_PASSWORD
+                }
             }
-        });
+        );
 
-        console.log("Bookings returned:", bookingsRes.data.Records.length);
-        res.json({ bookings: bookingsRes.data.Records });
+        const bookings = bookingsRes.data.Records || [];
 
+        console.log(`Found ${bookings.length} bookings for coworker.`);
+
+        res.json({ bookings: bookings });
     } catch (err) {
         console.error("Error calling Nexudus API:", err?.response?.data || err.message);
         res.status(500).json({ error: 'Failed to retrieve bookings.' });
@@ -106,3 +122,4 @@ app.get('/api/get-bookings', async (req, res) => {
 app.listen(port, () => {
     console.log(`Server running on port ${port}`);
 });
+

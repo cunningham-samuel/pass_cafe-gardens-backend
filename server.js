@@ -9,6 +9,7 @@ const port = process.env.PORT;
 
 app.use(cors());
 
+// Rate limiting
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 100,
@@ -17,11 +18,12 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
+// ENV variables
 const NEXUDUS_API_USERNAME = process.env.NEXUDUS_API_USERNAME;
 const NEXUDUS_API_PASSWORD = process.env.NEXUDUS_API_PASSWORD;
 const NEXUDUS_SHARED_SECRET = process.env.NEXUDUS_SHARED_SECRET;
 
-// ✅ Hash verification (unchanged)
+// Verify hash signature
 function isValidHash(userid, providedHash) {
     const stringToSign = String(userid).trim();
     const hmac = crypto.createHmac('sha256', NEXUDUS_SHARED_SECRET);
@@ -30,6 +32,7 @@ function isValidHash(userid, providedHash) {
     return calculatedHash === providedHash;
 }
 
+// API Route
 app.get('/api/get-bookings', async (req, res) => {
     const { userid, hash } = req.query;
 
@@ -39,30 +42,48 @@ app.get('/api/get-bookings', async (req, res) => {
     if (!/^\d+$/.test(userid)) {
         return res.status(400).json({ error: 'Invalid userid format.' });
     }
-
     if (!isValidHash(userid, hash)) {
         console.error('Invalid hash signature.');
         return res.status(403).json({ error: 'Invalid signature.' });
     }
 
     try {
-        const now = new Date();
-        const fromDate = now.toISOString();
-
-        const nexudusUrl = `https://spaces.nexudus.com/api/spaces/bookings?Booking_Coworker=${userid}&from_Booking_FromTime=${fromDate}&status=Confirmed`;
-
-        console.log("Calling Nexudus API:", nexudusUrl);  // ✅ debugging log
-
-        const bookingsRes = await axios.get(nexudusUrl, {
-            auth: {
-                username: NEXUDUS_API_USERNAME,
-                password: NEXUDUS_API_PASSWORD
+        // STEP 1 - Get CoworkerId from UserId
+        const coworkerRes = await axios.get(
+            `https://spaces.nexudus.com/api/billing/coworkers?Coworker_User=${userid}`,
+            {
+                auth: {
+                    username: NEXUDUS_API_USERNAME,
+                    password: NEXUDUS_API_PASSWORD
+                }
             }
-        });
+        );
+
+        if (!coworkerRes.data.Records || coworkerRes.data.Records.length === 0) {
+            return res.json({ bookings: [] });
+        }
+
+        const coworkerId = coworkerRes.data.Records[0].Id;
+
+        // STEP 2 - Get bookings for this coworker for today
+        const today = new Date();
+        const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
+
+        const bookingsRes = await axios.get(
+            `https://spaces.nexudus.com/api/spaces/bookings?Booking_Coworker=${coworkerId}&from_Booking_FromTime=${startOfDay.toISOString()}&to_Booking_ToTime=${endOfDay.toISOString()}&status=Confirmed`,
+            {
+                auth: {
+                    username: NEXUDUS_API_USERNAME,
+                    password: NEXUDUS_API_PASSWORD
+                }
+            }
+        );
 
         res.json({ bookings: bookingsRes.data.Records });
+
     } catch (err) {
-        console.error("Error calling Nexudus API:", err?.response?.data || err.message);
+        console.error("Error:", err?.response?.data || err.message);
         res.status(500).json({ error: 'Failed to retrieve bookings.' });
     }
 });

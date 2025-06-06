@@ -7,42 +7,32 @@ const rateLimit = require('express-rate-limit');
 const app = express();
 const port = process.env.PORT;
 
-// Apply CORS
 app.use(cors());
 
-// Rate limiter (keep this for basic DDoS protection)
 const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 min window
-    max: 100, // limit each IP to 100 requests per window
+    windowMs: 15 * 60 * 1000,
+    max: 100,
     standardHeaders: true,
     legacyHeaders: false,
 });
 app.use(limiter);
 
-// ENV variables
 const NEXUDUS_API_USERNAME = process.env.NEXUDUS_API_USERNAME;
 const NEXUDUS_API_PASSWORD = process.env.NEXUDUS_API_PASSWORD;
 const NEXUDUS_SHARED_SECRET = process.env.NEXUDUS_SHARED_SECRET;
 
-// Verify HMAC SHA-256 hash
+// ✅ Hash verification (unchanged)
 function isValidHash(userid, providedHash) {
     const stringToSign = String(userid).trim();
     const hmac = crypto.createHmac('sha256', NEXUDUS_SHARED_SECRET);
     hmac.update(stringToSign);
     const calculatedHash = hmac.digest('hex');
-
-    // Debug logs (comment out once tested)
-    console.log("UserID for hash verification:", stringToSign);
-    console.log("Calculated Hash:", calculatedHash);
-    console.log("Provided Hash:", providedHash);
-
     return calculatedHash === providedHash;
 }
 
 app.get('/api/get-bookings', async (req, res) => {
     const { userid, hash } = req.query;
 
-    // Validate input
     if (!userid || !hash) {
         return res.status(400).json({ error: 'Missing userid or hash parameter.' });
     }
@@ -50,27 +40,25 @@ app.get('/api/get-bookings', async (req, res) => {
         return res.status(400).json({ error: 'Invalid userid format.' });
     }
 
-    // Verify hash
     if (!isValidHash(userid, hash)) {
         console.error('Invalid hash signature.');
         return res.status(403).json({ error: 'Invalid signature.' });
     }
 
     try {
-        const bookingsRes = await axios.get(
-            `https://spaces.nexudus.com/api/spaces/bookings?customerid=${userid}&fromdate=${new Date().toISOString()}&status=Confirmed`,
-            {
-                auth: {
-                    username: NEXUDUS_API_USERNAME,
-                    password: NEXUDUS_API_PASSWORD
-                }
-            }
-        );
+        const now = new Date();
+        const fromDate = now.toISOString();
 
-        // TEMP LOGGING: Log full Nexudus API response
-        console.log("========== Nexudus API Response ==========");
-        console.log(JSON.stringify(bookingsRes.data, null, 2));
-        console.log("==========================================");
+        const nexudusUrl = `https://spaces.nexudus.com/api/spaces/bookings?Booking_Coworker=${userid}&from_Booking_FromTime=${fromDate}&status=Confirmed`;
+
+        console.log("Calling Nexudus API:", nexudusUrl);  // ✅ debugging log
+
+        const bookingsRes = await axios.get(nexudusUrl, {
+            auth: {
+                username: NEXUDUS_API_USERNAME,
+                password: NEXUDUS_API_PASSWORD
+            }
+        });
 
         res.json({ bookings: bookingsRes.data.Records });
     } catch (err) {
@@ -82,4 +70,3 @@ app.get('/api/get-bookings', async (req, res) => {
 app.listen(port, () => {
     console.log(`Server running on port ${port}`);
 });
-

@@ -75,7 +75,7 @@ app.get('/api/get-bookings', async (req, res) => {
         // STEP 1 - Lookup coworker by user ID
         console.log("Looking up coworker for UserID:", userid);
         const coworkerRes = await axios.get(
-            `https://spaces.nexudus.com/api/billing/coworkers?Coworker_User=${userid}`,
+            `https://spaces.nexudus.com/api/spaces/coworkers?Coworker_User=${userid}`,
             {
                 auth: {
                     username: NEXUDUS_API_USERNAME,

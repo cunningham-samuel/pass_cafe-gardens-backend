@@ -7,24 +7,20 @@ const rateLimit = require('express-rate-limit');
 const app = express();
 const port = process.env.PORT;
 
-// Apply CORS
 app.use(cors());
 
-// Apply basic rate limiting middleware
 const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
+    windowMs: 15 * 60 * 1000,
     max: 100,
     standardHeaders: true,
     legacyHeaders: false,
 });
 app.use(limiter);
 
-// Environment variables
 const NEXUDUS_API_USERNAME = process.env.NEXUDUS_API_USERNAME;
 const NEXUDUS_API_PASSWORD = process.env.NEXUDUS_API_PASSWORD;
 const NEXUDUS_SHARED_SECRET = process.env.NEXUDUS_SHARED_SECRET;
 
-// Hash verification function
 function isValidHash(userid, providedHash) {
     const stringToSign = String(userid).trim();
     const hmac = crypto.createHmac('sha256', NEXUDUS_SHARED_SECRET);
@@ -39,7 +35,6 @@ function isValidHash(userid, providedHash) {
     return calculatedHash === providedHash;
 }
 
-// Generate today's date range in Nexudus ISO format
 function getTodayDateRange() {
     const now = new Date();
 
@@ -90,8 +85,17 @@ app.get('/api/get-bookings', async (req, res) => {
             return res.json({ bookings: [] });
         }
 
-        const coworkerId = coworkerRecords[0].Id;
+        const coworker = coworkerRecords[0];
+        const coworkerId = coworker.Id;
         console.log("Found coworker ID:", coworkerId);
+
+        // ✅ NEW LOGIC: Check for Dedicated desk membership
+        const tariff = coworker.CoworkerContractTariffNames || '';
+        console.log("Tariff names:", tariff);
+        if (tariff.toLowerCase().includes("dedicated")) {
+            console.log("Dedicated desk member detected, skipping bookings check.");
+            return res.json({ dedicatedMember: true });
+        }
 
         // STEP 2 - Get bookings for coworker today
         const { from, to } = getTodayDateRange();
